@@ -17,17 +17,12 @@ const q = 'msg-q';
 
 const users = new Map();
 
-process.on('message', async ({hzPort, serverPort}) => {
-    spawn('./hazelcast-5.1/bin/hz-start', { stdio: 'inherit' });
-
-    await delay(10000)
-    await initServer(hzPort, serverPort);
-    
-    process.send('ok');
-});
-
 const initServer = (hzPort, serverPort) => {
     return new Promise(async (resolve) => {
+        spawn('./hazelcast-5.1/bin/hz-start', { stdio: 'inherit' });
+
+        await delay(10000);
+
         const hzClient = new HzClient('localhost', hzPort);
 
         await hzClient.init();
@@ -74,7 +69,6 @@ const initServer = (hzPort, serverPort) => {
             });
 
             socket.on('filters', async (filters) => {
-                console.log("filters set!");
                 await hzClient.updateUsersFilter({
                     ...filters,
                     userId: socket.id,
@@ -90,4 +84,7 @@ const initServer = (hzPort, serverPort) => {
     });
 };
 
+const SOCKET_SERVER = Number(process.env.SOCKET_SERVER);
+const HZ_SERVER = Number(process.env.HZ_SERVER);
 
+initServer(HZ_SERVER, SOCKET_SERVER);
