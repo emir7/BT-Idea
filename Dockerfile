@@ -11,7 +11,9 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY hazelcast-5.1 ./
 
+ENV SOCKET_SERVER=8081
+ENV HZ_SERVER=5701
+
 RUN npm install
 COPY . .
-EXPOSE 8001 5071
-CMD [ "node", "run.js" ]
+CMD [ "node", "server.js" ]
