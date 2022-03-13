@@ -15,9 +15,12 @@ module.exports = class HzClient extends EventEmitter {
     }
 
     async init() {
-        this.hzClientInstance = await Client.newHazelcastClient();
+        this.hzClientInstance = await Client.newHazelcastClient({
+            network: {
+                clusterMembers: [`${this.ip}:${this.port}`]
+            }
+        });
 
-        this.setInstanceId();
         this.setupMembershipListeners();
     }
 
@@ -35,6 +38,7 @@ module.exports = class HzClient extends EventEmitter {
     setupMembershipListeners() {
         const membershipListeners = {
             init: (event) => {
+                this.setInstanceId();
                 this.updateTopics(event.members);
             },
             memberAdded: (event) => {
@@ -56,9 +60,6 @@ module.exports = class HzClient extends EventEmitter {
     }
 
     async addNewTopic(memberId) {  
-        console.log(memberId);
-        console.log(this.instanceId);
-        console.log("------")      
         const topicKey = memberId.toString();
 
         if(this.topics.get(topicKey)) {
@@ -68,7 +69,6 @@ module.exports = class HzClient extends EventEmitter {
         const topic = await this.hzClientInstance.getReliableTopic(topicKey);
     
         if(memberId.toString() !== this.instanceId.toString()) {
-            console.log("adding topic!")
             this.topics.set(topicKey, {
                 topic,
             });
@@ -77,7 +77,6 @@ module.exports = class HzClient extends EventEmitter {
         }
 
         const listenerId = topic.addMessageListener((message) => {
-            console.log(message.messageObject);
             this.emit('msg', message.messageObject);
         });
 
@@ -106,10 +105,11 @@ module.exports = class HzClient extends EventEmitter {
             return;
         }
 
-        const { topic, listenerId } = topicData();
+        const { topic, listenerId } = topicData;
 
         topic.removeMessageListener(listenerId);
-
+        topic.destroy();
+        
         this.topics.delete(topicKey);
     }
 
@@ -152,8 +152,6 @@ module.exports = class HzClient extends EventEmitter {
             if(!filtersConfigured) {
                 return;
             }
-
-            console.log(message)
             
             if(message >= a && message <= b) {
                 const messageForInstance = {
