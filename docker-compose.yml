@@ -1,0 +1,12 @@
+version: "3.2"
+services:
+  bt:
+    build: .
+    ports:
+        - 8001:8001
+        - 5071:5071
+  bt2:
+    build: .
+    ports:
+        - 8002:8001
+        - 5072:5071
