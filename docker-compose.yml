@@ -1,12 +1,14 @@
 version: "3.2"
 services:
-  bt:
+  bt1:
     build: .
-    ports:
-        - 8001:8001
-        - 5071:5071
+    environment:
+      - SOCKET_SERVER=8001
+      - HZ_SERVER=5701
+    network_mode: "host"
   bt2:
     build: .
-    ports:
-        - 8002:8001
-        - 5072:5071
+    environment:
+      - SOCKET_SERVER=8002
+      - HZ_SERVER=5702
+    network_mode: "host"
