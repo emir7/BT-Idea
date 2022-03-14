@@ -1,11 +1,10 @@
 const { fork } = require('child_process');
 
-const spawnServerInstance = (serverStartPort, hzMemberSartPort, instanceNumber) => {
+const spawnServerInstance = (serverStartPort, instanceNumber) => {
     return new Promise((resolve) => {
         const serverInstance = fork('server.js');    
 
         serverInstance.send({
-            hzPort: hzMemberSartPort + instanceNumber,
             serverPort: serverStartPort + instanceNumber
         });
         
@@ -16,14 +15,14 @@ const spawnServerInstance = (serverStartPort, hzMemberSartPort, instanceNumber) 
     });
 };
 
-const spawnServerInstances = async (index, numberOfInstances, serverStartPort, hzMemberSartPort) => {
+const spawnServerInstances = async (index, numberOfInstances, serverStartPort) => {
     if(index === numberOfInstances) {
         return;
     }
 
-    await spawnServerInstance(serverStartPort, hzMemberSartPort, index);
+    await spawnServerInstance(serverStartPort, index);
 
-    spawnServerInstances(index + 1, numberOfInstances, serverStartPort, hzMemberSartPort);
+    spawnServerInstances(index + 1, numberOfInstances, serverStartPort);
 };
 
-spawnServerInstances(0, 2, 8000, 5701);
+spawnServerInstances(0, 10, 8000);
