@@ -6,7 +6,6 @@ const { Server } = require("socket.io");
 
 const HzClient = require('./hz-client');
 const RabbitConsumer = require('./rabbit-consumer');
-const { delay } = require('./utils');
 
 const http = require('http');
 const server = http.createServer(app);
@@ -17,13 +16,18 @@ const q = 'msg-q';
 
 const users = new Map();
 
-const initServer = (hzPort, serverPort) => {
+process.on('message', async ({serverPort}) => {
+    spawn('./hazelcast-5.1/bin/hz-start', { stdio: 'inherit' });
+
+    await initServer(serverPort);
+    
+    process.send('ok');
+});
+
+const initServer = (serverPort) => {
+    console.log(serverPort);
     return new Promise(async (resolve) => {
-        spawn('./hazelcast-5.1/bin/hz-start', { stdio: 'inherit' });
-
-        await delay(10000);
-
-        const hzClient = new HzClient('localhost', hzPort);
+        const hzClient = new HzClient();
 
         await hzClient.init();
 
@@ -69,6 +73,7 @@ const initServer = (hzPort, serverPort) => {
             });
 
             socket.on('filters', async (filters) => {
+                console.log("filters set!");
                 await hzClient.updateUsersFilter({
                     ...filters,
                     userId: socket.id,
@@ -78,13 +83,9 @@ const initServer = (hzPort, serverPort) => {
 
             socket.on('disconnect', async () => {
                 users.delete(socket.id);
+
                 await hzClient.removeUserFromList(socket.id);
             });
         });
     });
 };
-
-const SOCKET_SERVER = Number(process.env.SOCKET_SERVER);
-const HZ_SERVER = Number(process.env.HZ_SERVER);
-
-initServer(HZ_SERVER, SOCKET_SERVER);
