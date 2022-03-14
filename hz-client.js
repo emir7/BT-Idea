@@ -1,56 +1,65 @@
+
 const EventEmitter = require('events');
 const { Client } = require('hazelcast-client');
 
 module.exports = class HzClient extends EventEmitter {
 
-    constructor(ip, port) {
+    constructor() {
         super();
 
-        this.ip = ip;
-        this.port = port;
         this.instanceId = null;
         this.hzClientInstance = null;
+        
         this.usersListName = 'users';
+        this.registrationMapName = 'registrations';
         this.topics = new Map();
     }
 
     async init() {
-        this.hzClientInstance = await Client.newHazelcastClient({
-            network: {
-                clusterMembers: [`${this.ip}:${this.port}`]
-            }
-        });
+        this.hzClientInstance = await Client.newHazelcastClient();
 
         this.setupMembershipListeners();
     }
 
-    setInstanceId() {
-        const cluster = this.hzClientInstance.getCluster();
-        const members = cluster.getMembers();
+    async setInstanceId(members) {
+        if(this.instanceId) {
+            return;
+        }
 
-        const member = members.find((member) => {
-            return member.address.host === this.ip && member.address.port === this.port;
-        });
+        for(const member of members) {
+            const isMemberRegistered = await this.registerInstance(member.uuid);
 
-        this.instanceId = member.uuid;
+            if(isMemberRegistered) {
+                return;
+            }
+        }
     }
 
     setupMembershipListeners() {
         const membershipListeners = {
-            init: (event) => {
-                this.setInstanceId();
-                this.updateTopics(event.members);
+            init: async (event) => {
+                await this.setInstanceId(event.members);
+                await this.updateTopics(event.members);
             },
-            memberAdded: (event) => {
-                this.updateTopics(event.members);
+            memberAdded: async (event) => {
+                await this.setInstanceId(event.members);
+                await this.updateTopics(event.members);
             },
             memberRemoved: (event) => {
-                this.removeTopic(event.member.uuid);
                 this.removeInstanceFromUsersList(event.member.uuid);
+                this.removeTopic(event.member.uuid);
+                this.clearRegistrationMap(event.member.uuid);
             }
         };
 
         this.hzClientInstance.getCluster().addMembershipListener(membershipListeners);
+    }
+
+    async clearRegistrationMap(memberId) {
+        const registrationMap = await this.hzClientInstance.getMap(this.registrationMapName);
+        const memberIdAsString = memberId.toString();
+
+        await registrationMap.delete(memberIdAsString);
     }
 
     updateTopics(members) {
@@ -60,6 +69,10 @@ module.exports = class HzClient extends EventEmitter {
     }
 
     async addNewTopic(memberId) {  
+        if(!this.instanceId) {
+            return;
+        }
+        
         const topicKey = memberId.toString();
 
         if(this.topics.get(topicKey)) {
@@ -191,5 +204,33 @@ module.exports = class HzClient extends EventEmitter {
         }
 
         await usersList.removeAt(userIndex);
+    }
+
+    async registerInstance(memberId) {
+        if(this.instanceId) {
+            return true;
+        }
+
+        const registrationMap = await this.hzClientInstance.getMap(this.registrationMapName);
+        const memberIdAsString = memberId.toString();
+        const isMemberKeyLocked = await registrationMap.isLocked(memberIdAsString);
+
+        if(isMemberKeyLocked) {
+            return false;
+        }
+
+        const value = await registrationMap.get(memberIdAsString);
+
+        if(value) {
+            return false; 
+        }
+
+        await registrationMap.lock(memberIdAsString);
+        await registrationMap.set(memberIdAsString, true);
+        await registrationMap.unlock(memberIdAsString);
+
+        this.instanceId = memberId;
+
+        return true;
     }
 }
